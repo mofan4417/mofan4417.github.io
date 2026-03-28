@@ -10,6 +10,38 @@ const Home = () => {
   const [content, setContent] = useState<any>({});
   const [stats, setStats] = useState<any>({ total_served: 0, total_hours: 0, total_villages: 0, page_views: 0 });
   const [loading, setLoading] = useState(true);
+  const [heroIndex, setHeroIndex] = useState(0);
+
+  const parseJsonStringArray = (raw: unknown) => {
+    if (typeof raw !== 'string' || !raw.trim()) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+    } catch {
+      return [];
+    }
+  };
+
+  const heroImages = (() => {
+    const list = parseJsonStringArray(content.hero_images);
+    if (list.length > 0) return list;
+    const one = typeof content.hero_image === 'string' ? content.hero_image.trim() : '';
+    if (one) return [one];
+    return [
+      "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=A+warm+and+hopeful+scene+of+university+volunteers+visiting+left-behind+children+and+elderly+in+rural+China%2C+soft+sunlight%2C+cinematic%2C+high+quality&image_size=landscape_16_9",
+      "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=A+kind+volunteer+helping+an+elderly+person+use+a+smartphone%2C+rural+home%2C+warm+tones%2C+cinematic%2C+high+quality&image_size=landscape_16_9",
+      "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=A+volunteer+tutoring+a+left-behind+child+after+school+in+a+rural+village%2C+warm+lighting%2C+cinematic%2C+high+quality&image_size=landscape_16_9",
+    ];
+  })();
+
+  const heroIntervalMs = (() => {
+    const raw = Number(content.hero_slideshow_interval_ms);
+    if (Number.isFinite(raw) && raw >= 2000) return Math.floor(raw);
+    const rawSeconds = Number(content.hero_slideshow_interval_seconds);
+    if (Number.isFinite(rawSeconds) && rawSeconds >= 2) return Math.floor(rawSeconds * 1000);
+    return 6000;
+  })();
 
   const homePhotos = (() => {
     const raw = content.home_photos;
@@ -48,6 +80,27 @@ const Home = () => {
     return list.slice(0, count);
   })();
 
+  const formatViews = (value: number) => {
+    if (!Number.isFinite(value) || value < 0) return '0';
+    if (value >= 10000) {
+      const wan = value / 10000;
+      const text = wan >= 100 ? Math.round(wan).toString() : wan.toFixed(1);
+      return `${text}万`;
+    }
+    return new Intl.NumberFormat('zh-CN').format(Math.floor(value));
+  };
+
+  const pageViewsOffset = (() => {
+    const raw = Number(content.page_views_offset);
+    return Number.isFinite(raw) ? raw : 0;
+  })();
+
+  const displayPageViews = (() => {
+    const raw = Number(stats.page_views);
+    const base = Number.isFinite(raw) ? raw : 0;
+    return Math.max(0, base + pageViewsOffset);
+  })();
+
   useEffect(() => {
     const initHome = async () => {
       try {
@@ -77,6 +130,25 @@ const Home = () => {
     };
     initHome();
   }, []);
+
+  useEffect(() => {
+    heroImages.forEach((src) => {
+      try {
+        const img = new Image();
+        img.src = src;
+      } catch {
+      }
+    });
+  }, [heroImages.join('|')]);
+
+  useEffect(() => {
+    if (heroImages.length <= 1) return;
+    setHeroIndex(0);
+    const id = window.setInterval(() => {
+      setHeroIndex((prev) => (prev + 1) % heroImages.length);
+    }, heroIntervalMs);
+    return () => window.clearInterval(id);
+  }, [heroImages.length, heroIntervalMs]);
 
   if (loading && !content.hero_image) {
     return (
@@ -174,11 +246,14 @@ const Home = () => {
 
         <div className="max-w-7xl mx-auto mt-24 animate-slide-up">
           <div className="relative rounded-[40px] overflow-hidden shadow-2xl group border border-white/10 aspect-[21/9]">
-            <img 
-              src={content.hero_image || "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=A+serene+forest+landscape+with+sunlight+filtering+through+tall+trees%2C+dreamy+and+peaceful+atmosphere%2C+high+quality%2C+cinematic+lighting&image_size=landscape_16_9"} 
-              alt="乡助桥服务环境" 
-              className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-            />
+            {heroImages.map((src, idx) => (
+              <img
+                key={`${idx}-${src.slice(0, 20)}`}
+                src={src}
+                alt="乡助桥服务环境"
+                className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${idx === heroIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'} group-hover:scale-105`}
+              />
+            ))}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10 mt-16">
@@ -213,7 +288,7 @@ const Home = () => {
 
         {/* 浏览量统计 */}
         <div className="max-w-7xl mx-auto mt-16 text-right opacity-40 text-sm">
-          <p>网站总浏览量：{stats.page_views || 0}</p>
+          <p>网站总浏览量：{formatViews(displayPageViews)}</p>
         </div>
       </main>
 

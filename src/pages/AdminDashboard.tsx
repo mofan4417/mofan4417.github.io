@@ -34,12 +34,32 @@ const AdminDashboard = () => {
     total_hours: 0,
     total_villages: 0,
     hero_image: '',
+    hero_images: [] as string[],
+    hero_slideshow_interval_seconds: 6,
+    hero_quote_1: '',
+    hero_author_1: '',
+    hero_quote_2: '',
+    hero_author_2: '',
+    page_views_offset: 0,
     home_photos: [] as string[],
     home_photos_display_count: 0
   });
   const [newHomePhotoUrl, setNewHomePhotoUrl] = useState('');
+  const [newHeroImageUrl, setNewHeroImageUrl] = useState('');
 
   const maxHomePhotos = 20;
+  const maxHeroImages = 10;
+
+  const parseJsonStringArray = (raw: any) => {
+    if (typeof raw !== 'string' || !raw.trim()) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+    } catch {
+      return [];
+    }
+  };
 
   const getHomePhotosFromContent = (content: any) => {
     const raw = content?.home_photos;
@@ -63,6 +83,13 @@ const AdminDashboard = () => {
     }
 
     return list.slice(0, maxHomePhotos);
+  };
+
+  const getHeroImagesFromContent = (content: any) => {
+    const list = parseJsonStringArray(content?.hero_images);
+    if (list.length > 0) return list.slice(0, maxHeroImages);
+    const one = typeof content?.hero_image === 'string' ? content.hero_image.trim() : '';
+    return one ? [one] : [];
   };
 
   const fetchData = async () => {
@@ -96,6 +123,7 @@ const AdminDashboard = () => {
       setStats(statsData);
       setSiteContent(content);
 
+      const heroImages = getHeroImagesFromContent(content);
       const homePhotos = getHomePhotosFromContent(content);
       const displayCountRaw = Number(content?.home_photos_display_count);
       const displayCount = Number.isFinite(displayCountRaw) && displayCountRaw > 0
@@ -107,6 +135,13 @@ const AdminDashboard = () => {
         total_hours: statsData.total_hours || 0,
         total_villages: statsData.total_villages || 0,
         hero_image: content.hero_image || '',
+        hero_images: heroImages,
+        hero_slideshow_interval_seconds: Number(content?.hero_slideshow_interval_seconds) || 6,
+        hero_quote_1: content.hero_quote_1 || '',
+        hero_author_1: content.hero_author_1 || '',
+        hero_quote_2: content.hero_quote_2 || '',
+        hero_author_2: content.hero_author_2 || '',
+        page_views_offset: Number(content?.page_views_offset) || 0,
         home_photos: homePhotos,
         home_photos_display_count: displayCount
       });
@@ -139,11 +174,20 @@ const AdminDashboard = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
+      const heroImages = (settingsForm.hero_images || [])
+        .filter((x) => typeof x === 'string' && x.trim())
+        .map((x) => x.trim())
+        .slice(0, maxHeroImages);
+      const heroIntervalSecondsRaw = Number(settingsForm.hero_slideshow_interval_seconds);
+      const heroIntervalSeconds = Number.isFinite(heroIntervalSecondsRaw) ? Math.max(2, Math.floor(heroIntervalSecondsRaw)) : 6;
+
       const homePhotos = (settingsForm.home_photos || []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()).slice(0, maxHomePhotos);
       const displayCount = Math.min(
         Math.max(1, Number(settingsForm.home_photos_display_count) || homePhotos.length || 1),
         Math.max(1, homePhotos.length || 1),
       );
+      const pageViewsOffsetRaw = Number(settingsForm.page_views_offset);
+      const pageViewsOffset = Number.isFinite(pageViewsOffsetRaw) ? Math.floor(pageViewsOffsetRaw) : 0;
 
       await Promise.all([
         api.updateGlobalStats({
@@ -151,7 +195,14 @@ const AdminDashboard = () => {
           total_hours: settingsForm.total_hours,
           total_villages: settingsForm.total_villages
         }),
-        api.updateSiteContent('hero_image', settingsForm.hero_image),
+        api.updateSiteContent('hero_images', JSON.stringify(heroImages)),
+        api.updateSiteContent('hero_slideshow_interval_seconds', String(heroIntervalSeconds)),
+        api.updateSiteContent('hero_image', heroImages[0] || settingsForm.hero_image || ''),
+        api.updateSiteContent('hero_quote_1', settingsForm.hero_quote_1 || ''),
+        api.updateSiteContent('hero_author_1', settingsForm.hero_author_1 || ''),
+        api.updateSiteContent('hero_quote_2', settingsForm.hero_quote_2 || ''),
+        api.updateSiteContent('hero_author_2', settingsForm.hero_author_2 || ''),
+        api.updateSiteContent('page_views_offset', String(pageViewsOffset)),
         api.updateSiteContent('home_photos', JSON.stringify(homePhotos)),
         api.updateSiteContent('home_photos_display_count', String(displayCount)),
         api.updateSiteContent('service_photo_1', homePhotos[0] || ''),
@@ -746,6 +797,183 @@ const AdminDashboard = () => {
                       onChange={(e) => setSettingsForm({ ...settingsForm, hero_image: e.target.value })}
                     />
                   </div>
+
+                  <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
+                    <div className="flex items-center justify-between gap-6">
+                      <div className="text-xs font-bold opacity-60">封面轮播间隔（秒）</div>
+                      <input
+                        type="number"
+                        min={2}
+                        className="w-32 bg-[#1A0707] border border-white/10 rounded-xl py-2 px-4 text-sm font-bold text-[#F9D8C6] focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all text-right"
+                        value={settingsForm.hero_slideshow_interval_seconds}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setSettingsForm((prev) => {
+                            const next = Number.isFinite(v) ? Math.max(2, Math.floor(v)) : 6;
+                            return { ...prev, hero_slideshow_interval_seconds: next };
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="text-xs text-white/40 leading-relaxed">
+                      已启用平滑轮播（至少 2 秒）。封面图片建议使用与留守老人/儿童相关的高清横图链接。
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-end gap-4">
+                      <div className="flex-1 space-y-2">
+                        <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">封面轮播图片（URL 或上传）</label>
+                        <input
+                          type="text"
+                          className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
+                          value={newHeroImageUrl}
+                          onChange={(e) => setNewHeroImageUrl(e.target.value)}
+                          placeholder="粘贴图片链接后点击添加"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="bg-white/10 hover:bg-white/20 text-[#F3DDE4] font-bold px-6 py-3 rounded-xl transition-all border border-white/10 text-sm active:scale-95"
+                        onClick={() => {
+                          const url = newHeroImageUrl.trim();
+                          if (!url) return;
+                          setSettingsForm((prev) => {
+                            const next = [...(prev.hero_images || []), url].slice(0, maxHeroImages);
+                            return { ...prev, hero_images: next };
+                          });
+                          setNewHeroImageUrl('');
+                        }}
+                      >
+                        添加
+                      </button>
+                      <label className="bg-white/10 hover:bg-white/20 text-[#F3DDE4] font-bold px-6 py-3 rounded-xl transition-all border border-white/10 text-sm active:scale-95 cursor-pointer flex items-center justify-center gap-2">
+                        <Upload className="w-4 h-4" />
+                        上传
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={async (e) => {
+                            const files = Array.from(e.target.files || []);
+                            e.target.value = '';
+                            if (files.length === 0) return;
+                            try {
+                              const dataUrls = await Promise.all(files.map(readFileAsDataUrl));
+                              setSettingsForm((prev) => {
+                                const next = [...(prev.hero_images || []), ...dataUrls].slice(0, maxHeroImages);
+                                return { ...prev, hero_images: next };
+                              });
+                            } catch {
+                              alert('读取图片失败，请重试');
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {settingsForm.hero_images.length > 0 ? (
+                        settingsForm.hero_images.map((src, idx) => (
+                          <div key={`${idx}-${src.slice(0, 20)}`} className="aspect-[21/9] rounded-3xl overflow-hidden border border-white/10 bg-white/5 relative group">
+                            <img src={src} alt={`封面${idx + 1}`} className="w-full h-full object-cover" />
+                            <div className="absolute top-3 right-3 flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="p-2 bg-black/40 text-white/80 rounded-lg hover:bg-black/60 transition-all"
+                                onClick={() => {
+                                  setSettingsForm((prev) => {
+                                    const next = prev.hero_images.filter((_, i) => i !== idx);
+                                    return { ...prev, hero_images: next };
+                                  });
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                className="flex-1 bg-black/40 text-white/80 rounded-lg py-2 text-xs font-bold disabled:opacity-30 hover:bg-black/60 transition-all"
+                                onClick={() => {
+                                  setSettingsForm((prev) => {
+                                    if (idx === 0) return prev;
+                                    const next = [...prev.hero_images];
+                                    const temp = next[idx - 1];
+                                    next[idx - 1] = next[idx];
+                                    next[idx] = temp;
+                                    return { ...prev, hero_images: next };
+                                  });
+                                }}
+                              >
+                                上移
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === settingsForm.hero_images.length - 1}
+                                className="flex-1 bg-black/40 text-white/80 rounded-lg py-2 text-xs font-bold disabled:opacity-30 hover:bg-black/60 transition-all"
+                                onClick={() => {
+                                  setSettingsForm((prev) => {
+                                    if (idx >= prev.hero_images.length - 1) return prev;
+                                    const next = [...prev.hero_images];
+                                    const temp = next[idx + 1];
+                                    next[idx + 1] = next[idx];
+                                    next[idx] = temp;
+                                    return { ...prev, hero_images: next };
+                                  });
+                                }}
+                              >
+                                下移
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-8 rounded-3xl border border-white/10 bg-white/5 text-center text-white/30 text-sm">
+                          还没有封面轮播图片，先添加 URL 或上传图片
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-6">
+                    <div className="space-y-3">
+                      <div className="text-xs font-bold opacity-60">首页名言 1</div>
+                      <input
+                        type="text"
+                        className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
+                        value={settingsForm.hero_quote_1}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, hero_quote_1: e.target.value })}
+                        placeholder="请输入名言内容"
+                      />
+                      <input
+                        type="text"
+                        className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
+                        value={settingsForm.hero_author_1}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, hero_author_1: e.target.value })}
+                        placeholder="作者（可选）"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="text-xs font-bold opacity-60">首页名言 2</div>
+                      <input
+                        type="text"
+                        className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
+                        value={settingsForm.hero_quote_2}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, hero_quote_2: e.target.value })}
+                        placeholder="请输入名言内容"
+                      />
+                      <input
+                        type="text"
+                        className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
+                        value={settingsForm.hero_author_2}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, hero_author_2: e.target.value })}
+                        placeholder="作者（可选）"
+                      />
+                    </div>
+                  </div>
                   
                   <div className="space-y-4">
                     <div className="flex flex-col md:flex-row md:items-end gap-4">
@@ -944,6 +1172,27 @@ const AdminDashboard = () => {
                   <span className="text-2xl font-mono font-bold text-volunteer-peach">
                     {stats?.page_views || 0}
                   </span>
+                </div>
+
+                <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-3">
+                  <div className="flex items-center justify-between gap-6">
+                    <span className="text-sm text-white/60">浏览量展示加成</span>
+                    <input
+                      type="number"
+                      className="w-40 bg-[#1A0707] border border-white/10 rounded-xl py-2 px-4 text-sm font-bold text-[#F9D8C6] focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all text-right"
+                      value={settingsForm.page_views_offset}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setSettingsForm((prev) => ({ ...prev, page_views_offset: Number.isFinite(v) ? Math.floor(v) : 0 }));
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs text-white/40">
+                    展示值 = 实际浏览量 + 加成（不会影响真实统计自增）
+                  </div>
+                  <div className="text-xs text-white/40">
+                    当前展示：{(stats?.page_views || 0) + (Number(settingsForm.page_views_offset) || 0)}
+                  </div>
                 </div>
               </div>
             </div>
