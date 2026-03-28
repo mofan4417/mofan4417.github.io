@@ -55,12 +55,12 @@ const AdminLogin = () => {
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
               <label className="text-xs font-bold text-[#F3DDE4]/50 uppercase tracking-widest flex items-center gap-2 px-1">
-                <User className="w-4 h-4" /> 邮箱
+                <User className="w-4 h-4" /> 账号
               </label>
               <input
                 required
-                type="email"
-                placeholder="请输入邮箱"
+                type="text"
+                placeholder="请输入邮箱或管理员账号"
                 className="w-full bg-[#1A0707] border border-white/10 rounded-2xl py-4 px-6 text-white focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
                 value={email}
                 onChange={(e) => {
