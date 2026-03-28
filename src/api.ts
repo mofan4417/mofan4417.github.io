@@ -80,8 +80,7 @@ export const api = {
   updateSiteContent: async (key: string, value: string) => {
     const { data, error } = await supabase
       .from('site_content')
-      .update({ value })
-      .eq('key', key)
+      .upsert({ key, value }, { onConflict: 'key' })
       .select();
     if (error) throw error;
     return data?.[0];

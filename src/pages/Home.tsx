@@ -11,6 +11,43 @@ const Home = () => {
   const [stats, setStats] = useState<any>({ total_served: 0, total_hours: 0, total_villages: 0, page_views: 0 });
   const [loading, setLoading] = useState(true);
 
+  const homePhotos = (() => {
+    const raw = content.home_photos;
+    let list: string[] = [];
+
+    if (typeof raw === 'string' && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          list = parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+        }
+      } catch {
+        list = [];
+      }
+    }
+
+    if (list.length === 0) {
+      list = [content.service_photo_1, content.service_photo_2, content.service_photo_3]
+        .filter((x: any) => typeof x === 'string' && x.trim())
+        .map((x: any) => x.trim());
+    }
+
+    if (list.length === 0) {
+      list = [
+        'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=village+life+service+moment+photo+0&image_size=square',
+        'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=village+life+service+moment+photo+1&image_size=square',
+        'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=village+life+service+moment+photo+2&image_size=square',
+      ];
+    }
+
+    const displayCountRaw = content.home_photos_display_count;
+    const displayCount = Number(displayCountRaw);
+    const count =
+      Number.isFinite(displayCount) && displayCount > 0 ? Math.min(displayCount, list.length) : list.length;
+
+    return list.slice(0, count);
+  })();
+
   useEffect(() => {
     const initHome = async () => {
       try {
@@ -144,16 +181,12 @@ const Home = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mt-16">
-            {[
-              { src: content.service_photo_1, alt: "调研照片1" },
-              { src: content.service_photo_2, alt: "调研照片2" },
-              { src: content.service_photo_3, alt: "调研照片3" }
-            ].map((img, idx) => (
-              <div key={idx} className="rounded-3xl overflow-hidden shadow-2xl border border-white/10 group aspect-square relative cursor-pointer">
-                <img 
-                  src={img.src || `https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=village+life+service+moment+photo+${idx}&image_size=square`} 
-                  alt={img.alt} 
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10 mt-16">
+            {homePhotos.map((src, idx) => (
+              <div key={`${idx}-${src.slice(0, 20)}`} className="rounded-3xl overflow-hidden shadow-2xl border border-white/10 group aspect-square relative cursor-pointer">
+                <img
+                  src={src}
+                  alt={`调研照片${idx + 1}`}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 />
               </div>

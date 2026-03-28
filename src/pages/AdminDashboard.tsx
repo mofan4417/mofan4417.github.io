@@ -34,10 +34,36 @@ const AdminDashboard = () => {
     total_hours: 0,
     total_villages: 0,
     hero_image: '',
-    service_photo_1: '',
-    service_photo_2: '',
-    service_photo_3: ''
+    home_photos: [] as string[],
+    home_photos_display_count: 0
   });
+  const [newHomePhotoUrl, setNewHomePhotoUrl] = useState('');
+
+  const maxHomePhotos = 20;
+
+  const getHomePhotosFromContent = (content: any) => {
+    const raw = content?.home_photos;
+    let list: string[] = [];
+
+    if (typeof raw === 'string' && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          list = parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+        }
+      } catch {
+        list = [];
+      }
+    }
+
+    if (list.length === 0) {
+      list = [content?.service_photo_1, content?.service_photo_2, content?.service_photo_3]
+        .filter((x: any) => typeof x === 'string' && x.trim())
+        .map((x: any) => x.trim());
+    }
+
+    return list.slice(0, maxHomePhotos);
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -69,15 +95,20 @@ const AdminDashboard = () => {
       setObjects(objs || []);
       setStats(statsData);
       setSiteContent(content);
-      
+
+      const homePhotos = getHomePhotosFromContent(content);
+      const displayCountRaw = Number(content?.home_photos_display_count);
+      const displayCount = Number.isFinite(displayCountRaw) && displayCountRaw > 0
+        ? Math.min(displayCountRaw, Math.max(homePhotos.length, 1))
+        : Math.max(homePhotos.length, 1);
+
       setSettingsForm({
         total_served: statsData.total_served || 0,
         total_hours: statsData.total_hours || 0,
         total_villages: statsData.total_villages || 0,
         hero_image: content.hero_image || '',
-        service_photo_1: content.service_photo_1 || '',
-        service_photo_2: content.service_photo_2 || '',
-        service_photo_3: content.service_photo_3 || ''
+        home_photos: homePhotos,
+        home_photos_display_count: displayCount
       });
     } catch (err) {
       console.error('Critical error in dashboard:', err);
@@ -95,10 +126,25 @@ const AdminDashboard = () => {
     fetchData();
   }, []);
 
+  const readFileAsDataUrl = (file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('read_failed'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
+      const homePhotos = (settingsForm.home_photos || []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()).slice(0, maxHomePhotos);
+      const displayCount = Math.min(
+        Math.max(1, Number(settingsForm.home_photos_display_count) || homePhotos.length || 1),
+        Math.max(1, homePhotos.length || 1),
+      );
+
       await Promise.all([
         api.updateGlobalStats({
           total_served: settingsForm.total_served,
@@ -106,9 +152,11 @@ const AdminDashboard = () => {
           total_villages: settingsForm.total_villages
         }),
         api.updateSiteContent('hero_image', settingsForm.hero_image),
-        api.updateSiteContent('service_photo_1', settingsForm.service_photo_1),
-        api.updateSiteContent('service_photo_2', settingsForm.service_photo_2),
-        api.updateSiteContent('service_photo_3', settingsForm.service_photo_3),
+        api.updateSiteContent('home_photos', JSON.stringify(homePhotos)),
+        api.updateSiteContent('home_photos_display_count', String(displayCount)),
+        api.updateSiteContent('service_photo_1', homePhotos[0] || ''),
+        api.updateSiteContent('service_photo_2', homePhotos[1] || ''),
+        api.updateSiteContent('service_photo_3', homePhotos[2] || ''),
       ]);
       alert('设置已成功保存！');
       fetchData();
@@ -699,33 +747,144 @@ const AdminDashboard = () => {
                     />
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">服务瞬间 1</label>
+                  <div className="space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-end gap-4">
+                      <div className="flex-1 space-y-2">
+                        <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">首页照片墙（URL 或上传）</label>
+                        <input
+                          type="text"
+                          className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
+                          value={newHomePhotoUrl}
+                          onChange={(e) => setNewHomePhotoUrl(e.target.value)}
+                          placeholder="粘贴图片链接后点击添加"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="bg-white/10 hover:bg-white/20 text-[#F3DDE4] font-bold px-6 py-3 rounded-xl transition-all border border-white/10 text-sm active:scale-95"
+                        onClick={() => {
+                          const url = newHomePhotoUrl.trim();
+                          if (!url) return;
+                          setSettingsForm((prev) => {
+                            const next = [...(prev.home_photos || []), url].slice(0, maxHomePhotos);
+                            const displayCount = Math.min(Math.max(1, Number(prev.home_photos_display_count) || next.length || 1), Math.max(1, next.length || 1));
+                            return { ...prev, home_photos: next, home_photos_display_count: displayCount };
+                          });
+                          setNewHomePhotoUrl('');
+                        }}
+                      >
+                        添加
+                      </button>
+                      <label className="bg-white/10 hover:bg-white/20 text-[#F3DDE4] font-bold px-6 py-3 rounded-xl transition-all border border-white/10 text-sm active:scale-95 cursor-pointer flex items-center justify-center gap-2">
+                        <Upload className="w-4 h-4" />
+                        上传
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={async (e) => {
+                            const files = Array.from(e.target.files || []);
+                            e.target.value = '';
+                            if (files.length === 0) return;
+                            try {
+                              const dataUrls = await Promise.all(files.map(readFileAsDataUrl));
+                              setSettingsForm((prev) => {
+                                const next = [...(prev.home_photos || []), ...dataUrls].slice(0, maxHomePhotos);
+                                const displayCount = Math.min(Math.max(1, Number(prev.home_photos_display_count) || next.length || 1), Math.max(1, next.length || 1));
+                                return { ...prev, home_photos: next, home_photos_display_count: displayCount };
+                              });
+                            } catch {
+                              alert('读取图片失败，请重试');
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-6 p-4 bg-white/5 rounded-2xl border border-white/10">
+                      <div className="text-xs font-bold opacity-60">显示张数</div>
                       <input
-                        type="text"
-                        className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
-                        value={settingsForm.service_photo_1}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, service_photo_1: e.target.value })}
+                        type="number"
+                        min={1}
+                        max={Math.max(1, settingsForm.home_photos.length)}
+                        className="w-32 bg-[#1A0707] border border-white/10 rounded-xl py-2 px-4 text-sm font-bold text-[#F9D8C6] focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all text-right"
+                        value={settingsForm.home_photos_display_count}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setSettingsForm((prev) => {
+                            const max = Math.max(1, prev.home_photos.length || 1);
+                            const nextCount = Number.isFinite(v) ? Math.min(Math.max(1, v), max) : max;
+                            return { ...prev, home_photos_display_count: nextCount };
+                          });
+                        }}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">服务瞬间 2</label>
-                      <input
-                        type="text"
-                        className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
-                        value={settingsForm.service_photo_2}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, service_photo_2: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">服务瞬间 3</label>
-                      <input
-                        type="text"
-                        className="w-full bg-[#1A0707] border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:ring-2 focus:ring-[#F9D8C6]/50 transition-all"
-                        value={settingsForm.service_photo_3}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, service_photo_3: e.target.value })}
-                      />
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {settingsForm.home_photos.length > 0 ? (
+                        settingsForm.home_photos.map((src, idx) => (
+                          <div key={`${idx}-${src.slice(0, 20)}`} className="aspect-square rounded-3xl overflow-hidden border border-white/10 bg-white/5 relative group">
+                            <img src={src} alt={`首页照片${idx + 1}`} className="w-full h-full object-cover" />
+                            <div className="absolute top-3 right-3 flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="p-2 bg-black/40 text-white/80 rounded-lg hover:bg-black/60 transition-all"
+                                onClick={() => {
+                                  setSettingsForm((prev) => {
+                                    const next = prev.home_photos.filter((_, i) => i !== idx);
+                                    const max = Math.max(1, next.length || 1);
+                                    const nextCount = Math.min(Math.max(1, Number(prev.home_photos_display_count) || max), max);
+                                    return { ...prev, home_photos: next, home_photos_display_count: nextCount };
+                                  });
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                className="flex-1 bg-black/40 text-white/80 rounded-lg py-2 text-xs font-bold disabled:opacity-30 hover:bg-black/60 transition-all"
+                                onClick={() => {
+                                  setSettingsForm((prev) => {
+                                    if (idx === 0) return prev;
+                                    const next = [...prev.home_photos];
+                                    const temp = next[idx - 1];
+                                    next[idx - 1] = next[idx];
+                                    next[idx] = temp;
+                                    return { ...prev, home_photos: next };
+                                  });
+                                }}
+                              >
+                                上移
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === settingsForm.home_photos.length - 1}
+                                className="flex-1 bg-black/40 text-white/80 rounded-lg py-2 text-xs font-bold disabled:opacity-30 hover:bg-black/60 transition-all"
+                                onClick={() => {
+                                  setSettingsForm((prev) => {
+                                    if (idx >= prev.home_photos.length - 1) return prev;
+                                    const next = [...prev.home_photos];
+                                    const temp = next[idx + 1];
+                                    next[idx + 1] = next[idx];
+                                    next[idx] = temp;
+                                    return { ...prev, home_photos: next };
+                                  });
+                                }}
+                              >
+                                下移
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-2 md:col-span-3 p-8 rounded-3xl border border-white/10 bg-white/5 text-center text-white/30 text-sm">
+                          还没有照片，先添加 URL 或上传图片
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -734,7 +893,7 @@ const AdminDashboard = () => {
                       <ShieldCheck className="w-5 h-5" />
                     </div>
                     <p className="text-xs text-white/50 leading-relaxed">
-                      提示：您可以直接输入图片的 URL 地址。建议使用 Unsplash 或其他 CDN 链接以获得最佳加载速度。
+                      提示：上传会把图片保存为数据链接（适合少量图片）。如果图片很多或很大，建议用图床链接再添加 URL。
                     </p>
                   </div>
                 </div>
