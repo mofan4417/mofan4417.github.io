@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import WhatWeDo from "./pages/WhatWeDo";
 import ServiceObjects from "./pages/ServiceObjects";
@@ -11,7 +11,7 @@ import SubmitObject from "./pages/SubmitObject";
 
 export default function App() {
   return (
-    <Router>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/what-we-do" element={<WhatWeDo />} />
@@ -23,6 +23,6 @@ export default function App() {
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/submit-object" element={<SubmitObject />} />
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
 }
