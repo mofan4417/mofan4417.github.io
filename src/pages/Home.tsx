@@ -295,7 +295,7 @@ const Home = () => {
             <div className="absolute inset-0 bg-[#2B0B0B]/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <span className="text-[10px] font-bold text-white">加入</span>
             </div>
-          </button></div>
+          </button>
         </div>
 
         {/* 志愿者感言精选 */}

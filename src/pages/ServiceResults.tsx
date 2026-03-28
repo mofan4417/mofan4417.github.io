@@ -51,7 +51,7 @@ const ServiceResults = () => {
 
     const fetchData = async () => {
       try {
-        const [statsData, content] = await Promise.all([
+        const [statsData, contentData] = await Promise.all([
           api.getStats(),
           api.getSiteContent().catch(() => ({})),
         ]);
