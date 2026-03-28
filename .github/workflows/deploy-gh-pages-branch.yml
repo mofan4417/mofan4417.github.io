@@ -33,7 +33,8 @@ jobs:
       - name: Build
         run: |
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          if [[ "$REPO_NAME" == *.github.io ]]; then
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          if [[ "$REPO_NAME" == "$OWNER.github.io" ]]; then
             BASE_PATH="/"
           else
             BASE_PATH="/$REPO_NAME/"
