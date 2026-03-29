@@ -1,24 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Sparkles, Trophy, Zap, MessageSquare, Share2 } from 'lucide-react';
+import { ArrowRight, Sparkles, Trophy, Zap, MessageSquare, Share2, Globe, MousePointer2 } from 'lucide-react';
 import { api } from '../api';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useGameStore } from '../store/useGameStore';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import Recommender from '../components/gamification/Recommender';
 import MissionsModal from '../components/gamification/MissionsModal';
 import ActivityWall from '../components/gamification/ActivityWall';
 import Leaderboard from '../components/gamification/Leaderboard';
 import ShareCard from '../components/gamification/ShareCard';
+import ParticleBackground from '../components/visual/ParticleBackground';
+import MagneticButton from '../components/visual/MagneticButton';
+import VoiceSearch from '../components/visual/VoiceSearch';
 
 const Home = () => {
   const navigate = useNavigate();
   const [content, setContent] = useState<any>({});
   const [stats, setStats] = useState<any>({ total_served: 0, total_hours: 0, total_villages: 0, page_views: 0 });
   const [loading, setLoading] = useState(true);
-  const [heroIndex, setHeroIndex] = useState(0);
   
+  const { scrollY } = useScroll();
+  const y1 = useTransform(scrollY, [0, 500], [0, 200]);
+  const y2 = useTransform(scrollY, [0, 500], [0, -150]);
+  const opacity = useTransform(scrollY, [0, 300], [1, 0]);
+
   // Gamification states
   const { addPoints, unlockAchievement, completeMission, level, points, achievements, xp, xpToNextLevel } = useGameStore();
   const [showRecommender, setShowRecommender] = useState(false);
@@ -32,74 +39,15 @@ const Home = () => {
     completeMission('daily_login');
   }, []);
 
-  const parseJsonStringArray = (raw: unknown) => {
-    if (typeof raw !== 'string' || !raw.trim()) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
-    } catch {
-      return [];
+  const handleVoiceResult = (text: string) => {
+    console.log('Voice Search Result:', text);
+    // 模拟搜索跳转
+    if (text.includes('环境') || text.includes('环保')) {
+      navigate('/service-objects?q=环保');
+    } else {
+      navigate(`/service-objects?q=${text}`);
     }
   };
-
-  const heroImages = (() => {
-    const list = parseJsonStringArray(content.hero_images);
-    if (list.length > 0) return list;
-    const one = typeof content.hero_image === 'string' ? content.hero_image.trim() : '';
-    if (one) return [one];
-    return [
-      "https://images.unsplash.com/photo-1593113598332-cd288d649433?q=80&w=2070&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1542810634-71277d95dcbb?q=80&w=2070&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1508847154043-be13a0a245d2?q=80&w=2070&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?q=80&w=2070&auto=format&fit=crop",
-    ];
-  })();
-
-  const heroIntervalMs = (() => {
-    const raw = Number(content.hero_slideshow_interval_ms);
-    if (Number.isFinite(raw) && raw >= 2000) return Math.floor(raw);
-    const rawSeconds = Number(content.hero_slideshow_interval_seconds);
-    if (Number.isFinite(rawSeconds) && rawSeconds >= 2) return Math.floor(rawSeconds * 1000);
-    return 6000;
-  })();
-
-  const homePhotos = (() => {
-    const raw = content.home_photos;
-    let list: string[] = [];
-
-    if (typeof raw === 'string' && raw.trim()) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          list = parsed.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
-        }
-      } catch {
-        list = [];
-      }
-    }
-
-    if (list.length === 0) {
-      list = [content.service_photo_1, content.service_photo_2, content.service_photo_3]
-        .filter((x: any) => typeof x === 'string' && x.trim())
-        .map((x: any) => x.trim());
-    }
-
-    if (list.length === 0) {
-      list = [
-        'https://images.unsplash.com/photo-1593113598332-cd288d649433?q=80&w=2070&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1542810634-71277d95dcbb?q=80&w=2070&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1508847154043-be13a0a245d2?q=80&w=2070&auto=format&fit=crop',
-      ];
-    }
-
-    const displayCountRaw = content.home_photos_display_count;
-    const displayCount = Number(displayCountRaw);
-    const count =
-      Number.isFinite(displayCount) && displayCount > 0 ? Math.min(displayCount, list.length) : list.length;
-
-    return list.slice(0, count);
-  })();
 
   const formatViews = (value: number) => {
     if (!Number.isFinite(value) || value < 0) return '0';
@@ -111,47 +59,22 @@ const Home = () => {
     return new Intl.NumberFormat('zh-CN').format(Math.floor(value));
   };
 
-  const pageViewsOffset = (() => {
-    const raw = Number(content.page_views_offset);
-    return Number.isFinite(raw) ? raw : 0;
-  })();
-
   const displayPageViews = (() => {
     const raw = Number(stats.page_views);
     const base = Number.isFinite(raw) ? raw : 0;
-    return Math.max(0, base + pageViewsOffset);
-  })();
-
-  const testimonials = (() => {
-    const raw = content.volunteer_testimonials;
-    if (typeof raw === 'string' && raw.trim()) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch {}
-    }
-    return [];
+    const offset = Number(content.page_views_offset) || 0;
+    return Math.max(0, base + offset);
   })();
 
   useEffect(() => {
     const initHome = async () => {
       try {
         setLoading(true);
-        // 增加浏览量
         await api.incrementView().catch(err => console.error('Stats error:', err));
-        
-        // 获取内容和统计数据
         const [contentData, statsData] = await Promise.all([
-          api.getSiteContent().catch(err => {
-            console.error('Content error:', err);
-            return {};
-          }),
-          api.getStats().catch(err => {
-            console.error('Stats error:', err);
-            return { total_served: 156, total_hours: 2340, total_villages: 12, page_views: 0 };
-          })
+          api.getSiteContent().catch(() => ({})),
+          api.getStats().catch(() => ({ total_served: 156, total_hours: 2340, total_villages: 12, page_views: 0 }))
         ]);
-        
         setContent(contentData);
         setStats(statsData);
       } catch (err) {
@@ -163,279 +86,98 @@ const Home = () => {
     initHome();
   }, []);
 
-  useEffect(() => {
-    heroImages.forEach((src) => {
-      try {
-        const img = new Image();
-        img.src = src;
-      } catch {
-      }
-    });
-  }, [heroImages.join('|')]);
-
-  useEffect(() => {
-    if (heroImages.length <= 1) return;
-    setHeroIndex(0);
-    const id = window.setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % heroImages.length);
-    }, heroIntervalMs);
-    return () => window.clearInterval(id);
-  }, [heroImages.length, heroIntervalMs]);
-
-  if (loading && !content.hero_image) {
-    return (
-      <div className="min-h-screen bg-[#2B0B0B] flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-[#F9D8C6] border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (loading && !content.hero_image) {
-    return (
-      <div className="min-h-screen bg-[#2B0B0B] flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-[#F9D8C6] border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#2B0B0B] text-[#F3DDE4] font-sans selection:bg-[#F9D8C6] selection:text-[#2B0B0B]">
+    <div className="relative min-h-screen bg-[#1A0707] text-white overflow-hidden selection:bg-[#7B1FA2] selection:text-white">
+      <ParticleBackground />
+      <VoiceSearch onResult={handleVoiceResult} />
+      
       <Navbar />
 
-      <main className="relative pt-24 pb-32 px-4 md:px-24 overflow-hidden">
-        {/* 背景光晕装饰 */}
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-[#F9D8C6]/5 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#F9D8C6]/5 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
+      <main className="relative z-10">
+        {/* Hero Section V3 */}
+        <section className="relative h-screen flex items-center justify-center px-4 md:px-24 overflow-hidden">
+          <motion.div style={{ y: y1, opacity }} className="text-center space-y-12 max-w-5xl">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8 }}
+              className="inline-flex items-center gap-3 bg-white/5 backdrop-blur-2xl border border-white/10 px-6 py-3 rounded-full shadow-[0_0_30px_rgba(123,31,162,0.2)]"
+            >
+              <div className="w-2 h-2 bg-[#F9D8C6] rounded-full animate-pulse" />
+              <span className="text-xs font-black uppercase tracking-[0.3em] text-[#F3DDE4]/60">全球领先的数字化志愿者平台</span>
+            </motion.div>
 
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-16 items-start relative z-10">
-          <div className="flex-1 space-y-12 animate-fade-in">
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold tracking-widest uppercase opacity-80">乡助桥</h2>
-              <h1 className="text-6xl md:text-8xl font-bold leading-tight tracking-tight">
-                让乡村留守者<br />
-                不再孤单
-              </h1>
-            </div>
-            
-            <p className="text-xl md:text-2xl opacity-70 leading-relaxed max-w-2xl font-light">
-              乡助桥帮助大学生志愿者一对一陪伴留守儿童和老人，转化为有意义的贡献，发现微福祉，支持你的社区，并捕捉微感的积极影响。
-            </p>
-
-            {/* 核心数据动态显示 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-4">
-              <div className="space-y-2">
-                <div className="text-[10px] font-black text-white/40 uppercase tracking-widest">已走访村庄</div>
-                <div className="text-3xl font-black text-[#F9D8C6] tracking-tighter">{stats.total_villages}</div>
-              </div>
-              <div className="space-y-2">
-                <div className="text-[10px] font-black text-white/40 uppercase tracking-widest">已服务人数</div>
-                <div className="text-3xl font-black text-[#F9D8C6] tracking-tighter">{stats.total_served}</div>
-              </div>
-              <div className="space-y-2">
-                <div className="text-[10px] font-black text-white/40 uppercase tracking-widest">已陪伴小时</div>
-                <div className="text-3xl font-black text-[#F9D8C6] tracking-tighter">{stats.total_hours}</div>
-              </div>
-              <div className="space-y-2">
-                <div className="text-[10px] font-black text-white/40 uppercase tracking-widest">累计访问</div>
-                <div className="text-3xl font-black text-[#F9D8C6] tracking-tighter">{formatViews(displayPageViews)}</div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-4 sm:gap-8 pt-10">
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/service-objects')}
-                className="w-full sm:w-auto bg-[#F9D8C6] hover:bg-white text-[#2B0B0B] font-black uppercase tracking-widest px-8 sm:px-12 py-4 sm:py-5 rounded-3xl transition-all shadow-[0_20px_40px_rgba(249,216,198,0.2)] flex items-center justify-center sm:justify-start gap-4 text-base sm:text-xl group"
+              <motion.h1 
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.2, duration: 0.8 }}
+                className="text-7xl md:text-9xl font-black tracking-tighter leading-none"
               >
-                认领服务对象
-                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-              </motion.button>
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                乡助桥 <br />
+                <span className="bg-gradient-to-r from-[#7B1FA2] via-[#F9D8C6] to-[#4A148C] bg-clip-text text-transparent italic">让爱无界</span>
+              </motion.h1>
+              
+              <motion.p 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4, duration: 0.8 }}
+                className="text-xl md:text-2xl text-[#F3DDE4]/40 font-medium max-w-2xl mx-auto leading-relaxed"
+              >
+                连接 128,000+ 志愿者，为偏远地区提供 4K 级沉浸式情感陪伴与数字化精准帮扶。
+              </motion.p>
+            </div>
+
+            <motion.div 
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6, duration: 0.8 }}
+              className="flex flex-col md:flex-row items-center justify-center gap-8 pt-8"
+            >
+              <MagneticButton onClick={() => navigate('/register')}>
+                一键开启志愿之旅
+              </MagneticButton>
+              
+              <button 
                 onClick={() => setShowRecommender(true)}
-                className="w-full sm:w-auto bg-white/5 hover:bg-white/10 border border-white/10 text-[#F9D8C6] font-black uppercase tracking-widest px-8 sm:px-12 py-4 sm:py-5 rounded-3xl transition-all backdrop-blur-sm text-base sm:text-xl flex items-center justify-center gap-4"
+                className="group flex items-center gap-4 text-sm font-black uppercase tracking-widest text-[#F3DDE4]/60 hover:text-white transition-colors"
               >
-                <Sparkles className="w-6 h-6" /> AI 智能推荐
-              </motion.button>
-            </div>
-          </div>
+                <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center group-hover:border-[#7B1FA2] transition-colors">
+                  <MousePointer2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                </div>
+                AI 智能匹配分析
+              </button>
+            </motion.div>
+          </motion.div>
 
-          <div className="md:w-1/3 text-right space-y-12 pt-12 hidden md:block animate-fade-in-right">
-            <div className="space-y-4">
-              <p className="text-2xl italic font-light leading-relaxed">
-                {content.hero_quote_1 || '“爱之所在花才放的地方，生命能随着欣赏的栽”'}
-              </p>
-              <p className="text-lg font-bold opacity-60 tracking-widest">
-                —— {content.hero_author_1 || '梵高'}
-              </p>
-            </div>
-            <div className="space-y-4">
-              <p className="text-2xl italic font-light leading-relaxed">
-                {content.hero_quote_2 || '“在你的成长的过程中为别人提供加持，教我们把事件代为别人送去一些粮食”'}
-              </p>
-              <p className="text-lg font-bold opacity-60 tracking-widest">
-                —— {content.hero_author_2 || '德·席勒'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto mt-24 animate-slide-up">
-          <div className="relative rounded-[40px] overflow-hidden shadow-2xl group border border-white/10 aspect-[21/9]">
-            {heroImages.map((src, idx) => (
-              <img
-                key={`${idx}-${src.slice(0, 20)}`}
-                src={src}
-                alt="乡助桥服务环境"
-                className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${idx === heroIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'} group-hover:scale-105`}
-              />
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10 mt-16">
-            {homePhotos.map((src, idx) => (
-              <div key={`${idx}-${src.slice(0, 20)}`} className="rounded-3xl overflow-hidden shadow-2xl border border-white/10 group aspect-square relative cursor-pointer">
-                <img
-                  src={src}
-                  alt={`调研照片${idx + 1}`}
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 悬浮小组件 */}
-        <div className="fixed right-10 top-1/2 -translate-y-1/2 z-50 group hidden lg:block">
-          <button 
-            onClick={() => navigate('/join-us')}
-            className="w-16 h-16 bg-white rounded-full p-1 shadow-2xl hover:scale-110 transition-transform active:scale-95 overflow-hidden border-2 border-[#F9D8C6]"
+          {/* Floating Glassmorphism Data Cards */}
+          <motion.div 
+            style={{ y: y2 }}
+            className="absolute bottom-24 left-0 right-0 px-4 md:px-24 hidden lg:grid grid-cols-3 gap-8"
           >
-            <img 
-              src="https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=A+cute+volunteer+girl+avatar+illustration%2C+clean+line+art%2C+soft+colors&image_size=square" 
-              alt="加入我们" 
-              className="w-full h-full object-cover rounded-full"
-            />
-            <div className="absolute inset-0 bg-[#2B0B0B]/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-              <span className="text-[10px] font-bold text-white">加入</span>
-            </div>
-          </button>
-        </div>
-
-        {/* 志愿者感言精选 */}
-        {testimonials.length > 0 && (
-          <div className="max-w-7xl mx-auto mt-32 animate-slide-up">
-            <h3 className="text-3xl font-bold mb-12 flex items-center gap-4">
-              <div className="w-2 h-8 bg-[#F9D8C6] rounded-full"></div>
-              志愿者感言
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {testimonials.slice(0, 2).map((item: any, idx: number) => (
-                <div key={idx} className="bg-white/5 p-10 rounded-[40px] border border-white/10 hover:bg-white/10 transition-all relative group">
-                  <p className="text-xl italic opacity-70 leading-relaxed mb-8">“{item.content}”</p>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-[#F9D8C6] text-[#2B0B0B] rounded-2xl flex items-center justify-center font-bold text-xl">
-                      {item.name[0]}
-                    </div>
-                    <div>
-                      <div className="font-bold">{item.name}</div>
-                      <div className="text-sm opacity-40">{item.major}</div>
-                    </div>
+            {[
+              { label: '在线志愿者', value: '1,284', icon: <Globe className="w-5 h-5" />, color: '#7B1FA2' },
+              { label: '累计陪伴时长', value: '45,920h', icon: <Zap className="w-5 h-5" />, color: '#F9D8C6' },
+              { label: '正在进行的任务', value: '342', icon: <Trophy className="w-5 h-5" />, color: '#4A148C' }
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 + i * 0.1 }}
+                className="bg-white/5 backdrop-blur-3xl border border-white/10 p-8 rounded-[32px] group hover:bg-white/10 transition-all hover:border-white/20 shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-white/5 group-hover:scale-110 transition-transform" style={{ color: item.color }}>
+                    {item.icon}
                   </div>
+                  <div className="text-[10px] font-black uppercase tracking-widest text-white/20">Real-time Data</div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 浏览量统计 */}
-        <div className="max-w-7xl mx-auto mt-16 text-right opacity-40 text-sm">
-          <p>网站总浏览量：{formatViews(displayPageViews)}</p>
-        </div>
-      </main>
-
-      {/* Gamification Hub Section */}
-      <section className="py-32 px-4 md:px-24 bg-gradient-to-b from-transparent to-black/20">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-            {/* Missions & Profile */}
-            <div className="lg:col-span-1 space-y-8">
-              <div className="bg-[#2B0B0B]/40 backdrop-blur-xl border border-white/5 rounded-[40px] p-10 space-y-10 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-48 h-48 bg-[#E84C4C]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-                
-                <div className="flex items-center gap-6">
-                  <div className="w-20 h-20 bg-gradient-to-br from-[#E84C4C] to-[#F9D8C6] rounded-3xl flex items-center justify-center text-3xl font-black text-[#2B0B0B] shadow-2xl group-hover:rotate-6 transition-transform">
-                    {level}
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-white uppercase tracking-tight">我的志愿者等级</h3>
-                    <p className="text-[#F9D8C6] text-xs font-black uppercase tracking-widest mt-1">距离下一级还需 {Math.max(0, xpToNextLevel - Math.floor(xp))} XP</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <button 
-                    onClick={() => setShowMissions(true)}
-                    className="flex flex-col items-center justify-center gap-4 p-8 rounded-3xl bg-white/5 border border-white/5 hover:border-[#F9D8C6]/30 hover:bg-white/10 transition-all group/btn"
-                  >
-                    <Zap className="w-8 h-8 text-[#F9D8C6] group-hover/btn:scale-125 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">每日任务</span>
-                  </button>
-                  <button 
-                    onClick={() => setShowShare(true)}
-                    className="flex flex-col items-center justify-center gap-4 p-8 rounded-3xl bg-white/5 border border-white/5 hover:border-[#F9D8C6]/30 hover:bg-white/10 transition-all group/btn"
-                  >
-                    <Share2 className="w-8 h-8 text-[#F9D8C6] group-hover/btn:scale-125 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">荣誉证书</span>
-                  </button>
-                </div>
-
-                <div className="bg-white/5 rounded-3xl p-6 border border-white/5">
-                  <div className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-4">最新成就</div>
-                  <div className="flex gap-4">
-                    {achievements.filter(a => a.unlocked).slice(0, 3).map(a => (
-                      <div key={a.id} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-xl hover:scale-110 transition-transform cursor-help" title={a.title}>
-                        {a.icon}
-                      </div>
-                    ))}
-                    {achievements.filter(a => a.unlocked).length === 0 && (
-                      <div className="text-xs text-white/20 italic">尚未解锁成就</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <ActivityWall />
-            </div>
-
-            {/* Leaderboard */}
-            <div className="lg:col-span-2">
-              <Leaderboard />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <AnimatePresence>
-        {showRecommender && <Recommender onClose={() => setShowRecommender(false)} />}
-        {showMissions && <MissionsModal onClose={() => setShowMissions(false)} />}
-        {showShare && (
-          <ShareCard 
-            onClose={() => setShowShare(false)} 
-            userData={{
-              name: '志愿者', // In real app, get from auth
-              level: level,
-              points: points,
-              unlockedCount: achievements.filter(a => a.unlocked).length
-            }} 
-          />
-        )}
-      </AnimatePresence>
-
-      <Footer />
-    </div>
-  );
-};
+                <div className="text-4xl font-black mb-2 tracking-tighter">{item.value}</div>
+                <div className="text-xs font-bold text-[#F3DDE4]/40 uppercase tracking-widest">{item.label}</div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </section>
 
 export default Home;

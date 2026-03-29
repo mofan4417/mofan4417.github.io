@@ -11,18 +11,23 @@
     "check": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@react-three/drei": "^9.121.4",
+    "@react-three/fiber": "^8.17.10",
     "@supabase/supabase-js": "^2.49.1",
     "@types/canvas-confetti": "^1.9.0",
+    "@types/three": "^0.183.1",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.6",
     "framer-motion": "^12.38.0",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.511.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.3.0",
     "tailwind-merge": "^3.0.2",
+    "three": "^0.183.2",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

@@ -44,6 +44,7 @@ interface GameState {
   level: number;
   isAdmin: boolean;
   xp: number;
+  totalXp: number;
   xpToNextLevel: number;
   achievements: Achievement[];
   missions: Mission[];
@@ -76,34 +77,49 @@ export const useGameStore = create<GameState>()(
       level: 1,
       isAdmin: false,
       xp: 0,
+      totalXp: 0,
       xpToNextLevel: 100,
       achievements: INITIAL_ACHIEVEMENTS,
       missions: INITIAL_MISSIONS,
 
-      addPoints: (amount) => {
-        set((state) => {
-          let newXp = state.xp + amount;
-          let newLevel = state.level;
-          let newXpToNextLevel = state.xpToNextLevel;
+      addPoints: (amount: number) => {
+        const state = get();
+        const currentTotalXp = (state.totalXp || 0) + amount;
+        
+        let newLevel = 1;
+        let tempXp = currentTotalXp;
+        let currentLevelThreshold = 100;
 
-          while (newXp >= newXpToNextLevel && newLevel < 9) {
-            newXp -= newXpToNextLevel;
-            newLevel += 1;
-            newXpToNextLevel = Math.floor(newXpToNextLevel * 1.5);
-            
-            // Level up celebration
-            confetti({
-              particleCount: 150,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ['#FFD700', '#FFA500', '#FFFFFF']
-            });
-          }
+        while (tempXp >= currentLevelThreshold && newLevel < 9) {
+          tempXp -= currentLevelThreshold;
+          newLevel += 1;
+          currentLevelThreshold = Math.floor(currentLevelThreshold * 1.5);
+        }
 
-          // Admin override
-          if (state.isAdmin) newLevel = 9;
+        const levelUp = newLevel > state.level;
+        if (levelUp) {
+          confetti({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#7B1FA2', '#4A148C', '#FFD700']
+          });
+        }
 
-          return { points: state.points + amount, xp: newXp, level: newLevel, xpToNextLevel: newXpToNextLevel };
+        let newAchievements = [...state.achievements];
+        if (newLevel >= 5) {
+          newAchievements = newAchievements.map(a => 
+            a.id === 'level_5' ? { ...a, unlocked: true } : a
+          );
+        }
+
+        set({ 
+          points: state.points + amount, 
+          totalXp: currentTotalXp,
+          xp: tempXp, 
+          level: state.isAdmin ? 9 : newLevel, 
+          xpToNextLevel: currentLevelThreshold,
+          achievements: newAchievements
         });
       },
 
